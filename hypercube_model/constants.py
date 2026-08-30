@@ -1,0 +1,13 @@
+"""Numerische Konstanten und Einstellungen der Darstellung."""
+
+SHEAR_MARGIN = 1.0
+CUT_FRACTION = 0.92
+CUT_MARGIN = 0.05
+ZERO_TOLERANCE = 1e-12
+TARGET_HEIGHT = 1.0
+
+MODEL_COLOR = "rgb(45, 105, 210)"
+EDGE_COLOR = "rgb(20, 20, 20)"
+VIEW_WIDTH = 1000
+VIEW_HEIGHT = 700
+MODEL_OPACITY = 0.30
