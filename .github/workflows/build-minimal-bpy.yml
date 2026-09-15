@@ -56,12 +56,26 @@ jobs:
 
       - name: Build, test and package inside manylinux
         run: |
+          set -o pipefail
           docker run --rm \
             --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal,dst=/work" \
             --workdir /work \
             -e BPY_BUILD_JOBS=4 \
             quay.io/pypa/manylinux_2_28_x86_64 \
-            /bin/bash /work/scripts/run_pipeline_manylinux.sh
+            /bin/bash /work/scripts/run_pipeline_manylinux.sh \
+            2>&1 | tee bpy_minimal/logs/pipeline.log
+
+      - name: Publish failure diagnostic
+        if: failure()
+        run: |
+          {
+            echo '## manylinux failure tail'
+            echo
+            echo '```text'
+            tail -n 160 bpy_minimal/logs/pipeline.log 2>/dev/null || \
+              echo 'pipeline.log was not created'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build evidence and wheel
         if: always()
