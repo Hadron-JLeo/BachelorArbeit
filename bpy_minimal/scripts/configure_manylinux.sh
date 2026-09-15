@@ -27,6 +27,6 @@ cmake -S "${BLENDER_SOURCE}" -B "${BUILD_DIR}" -G Ninja \
   2>&1 | tee "${WORK_ROOT}/logs/configure-base.log"
 
 # Vor dem Kompilieren werden die tatsächlich aufgelösten Kernoptionen protokolliert.
-grep -E '^(PYTHON_VERSION|PYTHON_EXECUTABLE|PYTHON_LIBRARY|WITH_(PYTHON_MODULE|PYTHON_INSTALL|HEADLESS|CYCLES|USD|OPENVDB|MATERIALX|AUDASPACE|OPENCOLORIO)):.*=' \
+grep -E '^(PYTHON_VERSION|PYTHON_EXECUTABLE|PYTHON_LIBRARY|WITH_(PYTHON_MODULE|PYTHON_INSTALL|HEADLESS|CYCLES|USD|OPENVDB|MATERIALX|AUDASPACE|OPENCOLORIO|LINKER_GOLD)):.*=' \
   "${BUILD_DIR}/CMakeCache.txt" \
   > "${WORK_ROOT}/reports/effective-cmake-options.txt"

@@ -11,6 +11,9 @@ set(WITH_INSTALL_COPYRIGHT ON CACHE BOOL "" FORCE)
 set(WITH_LIBS_PRECOMPILED ON CACHE BOOL "" FORCE)
 set(WITH_STRICT_BUILD_OPTIONS ON CACHE BOOL "" FORCE)
 set(WITH_MEM_JEMALLOC OFF CACHE BOOL "" FORCE)
+# Das im manylinux-Image vorhandene ld.gold unterstützt CMake-Linker-Depfiles
+# nicht; der aktuelle GNU-BFD-Linker des GCC-Toolsets wird stattdessen verwendet.
+set(WITH_LINKER_GOLD OFF CACHE BOOL "" FORCE)
 
 set(WITH_HEADLESS ON CACHE BOOL "" FORCE)
 set(WITH_GHOST_X11 OFF CACHE BOOL "" FORCE)
