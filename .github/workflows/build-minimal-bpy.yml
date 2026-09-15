@@ -1,0 +1,76 @@
+name: Build minimal bpy baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/minimal-bpy
+    paths:
+      - .github/workflows/build-minimal-bpy.yml
+      - bpy_minimal/**
+
+concurrency:
+  group: minimal-bpy-baseline
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Report runner resources
+        run: |
+          uname -a
+          lscpu
+          free -h
+          df -h
+
+      - name: Reclaim unrelated runner SDK space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          df -h
+
+      - name: Install host source tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y git-lfs
+
+      - name: Fetch pinned Blender sources and Linux libraries
+        run: |
+          chmod +x bpy_minimal/scripts/*.sh
+          bpy_minimal/scripts/fetch_sources.sh "$GITHUB_WORKSPACE/bpy_minimal"
+
+      - name: Pull and record manylinux image
+        run: |
+          docker pull quay.io/pypa/manylinux_2_28_x86_64
+          docker image inspect quay.io/pypa/manylinux_2_28_x86_64 \
+            > bpy_minimal/reports/build-image.json
+
+      - name: Build, test and package inside manylinux
+        run: |
+          docker run --rm \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal,dst=/work" \
+            --workdir /work \
+            -e BPY_BUILD_JOBS=4 \
+            quay.io/pypa/manylinux_2_28_x86_64 \
+            /bin/bash /work/scripts/run_pipeline_manylinux.sh
+
+      - name: Upload build evidence and wheel
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: minimal-bpy-baseline
+          path: |
+            bpy_minimal/dist/raw/*.whl
+            bpy_minimal/reports/
+            bpy_minimal/logs/
+          if-no-files-found: warn
+          retention-days: 7
