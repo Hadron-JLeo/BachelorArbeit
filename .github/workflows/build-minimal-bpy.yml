@@ -127,6 +127,8 @@ jobs:
             "$MANYLINUX_IMAGE" \
             /bin/bash /validation/scripts/validate_final_manylinux.sh \
             2>&1 | tee bpy_minimal/validation/reports/validation.log
+          sudo chown -R "$(id -u):$(id -g)" \
+            bpy_minimal/validation/reports
           ! grep --extended-regexp --ignore-case --quiet \
             '(^Internal error:|^Error:|^Add-on not loaded:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
             bpy_minimal/validation/reports/validation.log
