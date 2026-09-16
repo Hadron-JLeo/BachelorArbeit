@@ -20,6 +20,36 @@ Das vorbereitete Notebook
 das passende Linux-Wheel für Python 3.11 oder 3.12, prüft vor der Installation
 seine SHA-256-Summe und erzeugt anschließend eine kleine `.blend`-Datei.
 
+## Fertige Wheels
+
+Die geprüften Wheels stehen im GitHub-Release
+[`bpy-mesh-4.5.3.1`](https://github.com/Hadron-JLeo/BachelorArbeit/releases/tag/bpy-mesh-4.5.3.1).
+Sie sind ausschließlich für Linux x86_64 mit glibc 2.28 oder neuer bestimmt:
+
+| Python | Download | Installiert | SHA-256 |
+|---|---:|---:|---|
+| 3.11 | 31.342.629 Byte | 102.729.860 Byte | `651c74dce5c00b1a822c4ff0d78d6d0cf3904079a78308e171acf28e53629409` |
+| 3.12 | 31.349.258 Byte | 102.740.132 Byte | `1f26833ce95fd2c60f42d9f44b34a97326a3a6246d0b3d177d59fb83e99e2ff5` |
+
+`bpy` selbst besitzt keine zusätzliche Python-Laufzeitabhängigkeit. Für das
+Hypercube-Projekt kommt in einer leeren Umgebung NumPy 2.0.2 hinzu; der
+Gesamtdownload beträgt dadurch 50.877.524 Byte unter Python 3.11 beziehungsweise
+50.585.431 Byte unter Python 3.12. Ist NumPy bereits vorhanden, bleibt es bei der
+jeweiligen Wheel-Größe aus der Tabelle.
+
+Die Wheels wurden mit deaktiviertem OpenGL-Backend gebaut, weil diese Variante
+den vollständigen vereinbarten Exportvertrag bestand und die kleinste gemessene
+Datei ergab. Python 3.12 ist ein zusätzlich portierter und vollständig mit dem
+Projektvertrag geprüfter Build; der zugrunde liegende Blender-4.5.3-Quellstand
+verwendet upstream regulär Python 3.11.
+
+Weil die Schriften für Blenders Benutzeroberfläche nicht zum Headless-Export
+benötigt werden, sind sie nicht enthalten. Meldungen wie `Font data directory
+"fonts/" could not be detected!` sind daher für diesen eingeschränkten Build
+erwartet. Die `.blend`-Erzeugung, Materialien, Text-Datenblöcke und Unicode-Namen
+werden davon nicht beeinträchtigt; Darstellung von UI-Text gehört nicht zum
+zugesagten Umfang.
+
 ## Abgesicherter Umfang
 
 Der Test bildet den tatsächlich benötigten Notebook-Vertrag ab:
