@@ -37,7 +37,7 @@ run_contract() {
 runtime_log_is_clean() {
   local log="$1"
   ! grep --extended-regexp --ignore-case --quiet \
-    '(Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found)|Error: Failed)' \
+    '(^Internal error:|^Error:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
     "${log}"
 }
 
@@ -46,7 +46,11 @@ record_removed_files() {
   local stage="$2"
   local output="$3"
   shift 3
-  local relative_path target file relative bytes
+  local relative_path target file relative bytes xtrace_was_enabled=false
+  if [[ "$-" == *x* ]]; then
+    xtrace_was_enabled=true
+    set +x
+  fi
   for relative_path in "$@"; do
     target="${stage}/${relative_path}"
     if [[ -d "${target}" ]]; then
@@ -61,9 +65,12 @@ record_removed_files() {
       bytes="$(stat --dereference --format='%s' "${target}")"
       printf '%s\t%s\t%s\t%s\n' \
         "${name}" "${relative_path}" "${bytes}" 'not required by the tested export contract' \
-        >> "${output}"
+      >> "${output}"
     fi
   done
+  if [[ "${xtrace_was_enabled}" == true ]]; then
+    set -x
+  fi
 }
 
 new_candidate() {
@@ -84,6 +91,11 @@ record_candidate() {
 }
 
 try_remove() {
+  local keep_empty_directories=false
+  if [[ "$1" == "--keep-empty-directories" ]]; then
+    keep_empty_directories=true
+    shift
+  fi
   local name="$1"
   shift
   local before candidate after log removal_manifest
@@ -96,6 +108,9 @@ try_remove() {
   record_removed_files "${name}" "${candidate}" "${removal_manifest}" "$@"
   for relative_path in "$@"; do
     rm -rf -- "${candidate}/${relative_path}"
+    if [[ "${keep_empty_directories}" == true ]]; then
+      mkdir -p -- "${candidate}/${relative_path}"
+    fi
   done
   after="$(stage_bytes "${candidate}")"
 
@@ -171,7 +186,7 @@ try_strip() {
 # process.  The order starts with the largest known build-installation leakage.
 try_remove python-bundle "bpy/4.5/python"
 try_runtime_closure
-try_remove addons-core "bpy/4.5/scripts/addons_core"
+try_remove --keep-empty-directories addons-core "bpy/4.5/scripts/addons_core"
 try_remove presets-and-templates \
   "bpy/4.5/scripts/presets" \
   "bpy/4.5/scripts/templates_osl" \

@@ -49,10 +49,33 @@ mkdir -p "${ROOT}/reports" "${ROOT}/downloads/numpy"
   read "${ROOT}/reports/minimal-multi/second"
 
 # Independent compatibility oracle: the unmodified official Blender wheel.
+# The manylinux build image intentionally lacks desktop X11 libraries. They are
+# installed only now, after the minimal wheel has proved that it needs none of
+# them, so the official wheel can serve as an independent .blend reader/writer.
+dnf install -y \
+  alsa-lib \
+  libICE \
+  libSM \
+  libX11 \
+  libXcursor \
+  libXext \
+  libXfixes \
+  libXi \
+  libXinerama \
+  libXrandr \
+  libXrender \
+  libXxf86vm \
+  libxkbcommon \
+  mesa-libEGL \
+  mesa-libGL
 "${OFFICIAL_PYTHON}" -m venv "${OFFICIAL_VENV}"
 "${OFFICIAL_VENV}/bin/python" -m pip install --disable-pip-version-check \
   'bpy==4.5.3'
 "${OFFICIAL_VENV}/bin/python" -m pip check
+official_extension="$(find "${OFFICIAL_VENV}" -path '*/site-packages/bpy/__init__.so' -print -quit)"
+test -n "${official_extension}"
+ldd "${official_extension}" | tee "${ROOT}/reports/official-bpy-ldd.txt"
+! grep --quiet 'not found' "${ROOT}/reports/official-bpy-ldd.txt"
 "${OFFICIAL_VENV}/bin/python" -c \
   'import bpy; print("OFFICIAL_IMPORT_OK", bpy.__file__, bpy.app.version_string)'
 "${OFFICIAL_VENV}/bin/python" "${ROOT}/tests/verify_blend.py" \
