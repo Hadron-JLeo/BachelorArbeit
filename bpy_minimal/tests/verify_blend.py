@@ -20,6 +20,7 @@ def snapshot() -> dict:
             "parent": obj.parent.name if obj.parent else None,
             "collections": sorted(collection.name for collection in obj.users_collection),
             "matrix": [list(row) for row in obj.matrix_world],
+            "color": list(obj.color),
             "properties": {key: obj[key] for key in sorted(obj.keys())},
         }
         if obj.type == "EMPTY":
@@ -44,6 +45,10 @@ def snapshot() -> dict:
         objects[obj.name] = state
     return {
         "scene": bpy.context.scene.name,
+        "active": (
+            bpy.context.view_layer.objects.active.name
+            if bpy.context.view_layer.objects.active else None
+        ),
         "collections": {
             collection.name: {
                 "objects": sorted(obj.name for obj in collection.objects),
@@ -53,6 +58,21 @@ def snapshot() -> dict:
         },
         "objects": objects,
         "texts": {text.name: text.as_string() for text in bpy.data.texts},
+        "views": [
+            {
+                "shading": area.spaces.active.shading.type,
+                "color_type": area.spaces.active.shading.color_type,
+                "show_cavity": area.spaces.active.shading.show_cavity,
+                "location": list(area.spaces.active.region_3d.view_location),
+                "distance": area.spaces.active.region_3d.view_distance,
+                "rotation": list(area.spaces.active.region_3d.view_rotation),
+                "clip_start": area.spaces.active.clip_start,
+                "clip_end": area.spaces.active.clip_end,
+            }
+            for screen in bpy.data.screens
+            for area in screen.areas
+            if area.type == "VIEW_3D"
+        ],
     }
 
 
@@ -88,6 +108,8 @@ def write(folder: Path) -> None:
     root.empty_display_size = 0.2
     root["role"] = "model_root"
     root["dimension"] = 4
+    root["polygon_count"] = 4
+    root["hierarchy"] = "Induktionspfad: links zuerst; 0=Original, 1=Spiegelbild"
 
     group = bpy.data.objects.new("Schritt_01_0", None)
     model_collection.objects.link(group)
@@ -115,6 +137,11 @@ def write(folder: Path) -> None:
         obj.parent = group if index else root
         obj["label"] = "Q₄ – " + name
         obj["source_index"] = index
+        obj["source_label"] = name
+        obj["construction_path"] = format(index, "02b")[::-1]
+        obj["graph_bits"] = format(index, "02b")
+        obj["vertex_count_numpy"] = len(vertices)
+        obj["neighbor_indices_json"] = json.dumps([index ^ 1, index ^ 2])
         obj.location = Vector((0.25, -1.5, 2.0))
         obj.scale = (-1.0, 0.5, 2.0)
         obj.show_wire = True
@@ -127,6 +154,7 @@ def write(folder: Path) -> None:
         )
         material.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.65
         mesh.materials.append(material)
+        obj.color = material.diffuse_color
 
     source_text = bpy.data.texts.new("NumPy_Quelldaten.json")
     source_text.write('{"schema_version": 1, "label": "Q₄ – Quelle"}')
@@ -138,7 +166,14 @@ def write(folder: Path) -> None:
             if area.type == "VIEW_3D":
                 area.spaces.active.shading.type = "SOLID"
                 area.spaces.active.shading.color_type = "MATERIAL"
+                area.spaces.active.shading.show_cavity = True
                 area.spaces.active.region_3d.view_location = Vector((0.0, 0.0, 0.0))
+                area.spaces.active.region_3d.view_distance = 8.25
+                area.spaces.active.region_3d.view_rotation = Quaternion(
+                    (0.820, 0.425, 0.176, 0.340)
+                ).normalized()
+                area.spaces.active.clip_start = 0.0001
+                area.spaces.active.clip_end = 1000.0
     bpy.context.view_layer.objects.active = root
     root.select_set(True)
     bpy.context.preferences.filepaths.save_version = 0

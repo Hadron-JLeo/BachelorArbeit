@@ -1,0 +1,19 @@
+diff --git a/build_files/utils/make_bpy_wheel.py b/build_files/utils/make_bpy_wheel.py
+index 8d238f5..f686c25 100755
+--- a/build_files/utils/make_bpy_wheel.py
++++ b/build_files/utils/make_bpy_wheel.py
+@@ -256,10 +256,10 @@ def main() -> None:
+         name="bpy",
+         version=blender_version_str,
+ 
+-        # `bpy` is not compatible with `numpy` 2+, as the VFX reference platform uses
+-        # 1.26 at the moment. This fix amended the install requirement package to specify
+-        # `numpy>=1.26,<2.0` to mitigate this issue.
+-        install_requires=["cython", "numpy>=1.26,<2.0", "requests", "zstandard"],
++        # This build disables Blender's NumPy integration and all features that use
++        # these generic upstream wheel dependencies.  Its isolated runtime contract
++        # test below proves that bpy itself has no third-party Python requirement.
++        install_requires=[],
+ 
+         python_requires="==%d.%d.*" % (python_version_number[0], python_version_number[1]),
+         packages=["bpy"],

@@ -1,4 +1,4 @@
-name: Build minimal bpy baseline
+name: Build and verify minimal bpy
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ on:
       - bpy_minimal/**
 
 concurrency:
-  group: minimal-bpy-baseline
+  group: minimal-bpy
   cancel-in-progress: false
 
 jobs:
@@ -49,19 +49,23 @@ jobs:
           bpy_minimal/scripts/fetch_sources.sh "$GITHUB_WORKSPACE/bpy_minimal"
 
       - name: Pull and record manylinux image
+        env:
+          MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
         run: |
-          docker pull quay.io/pypa/manylinux_2_28_x86_64
-          docker image inspect quay.io/pypa/manylinux_2_28_x86_64 \
+          docker pull "$MANYLINUX_IMAGE"
+          docker image inspect "$MANYLINUX_IMAGE" \
             > bpy_minimal/reports/build-image.json
 
       - name: Build, test and package inside manylinux
+        env:
+          MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
         run: |
           set -o pipefail
           docker run --rm \
             --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal,dst=/work" \
             --workdir /work \
             -e BPY_BUILD_JOBS=4 \
-            quay.io/pypa/manylinux_2_28_x86_64 \
+            "$MANYLINUX_IMAGE" \
             /bin/bash /work/scripts/run_pipeline_manylinux.sh \
             2>&1 | tee bpy_minimal/logs/pipeline.log
 
@@ -81,9 +85,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: minimal-bpy-baseline
+          name: minimal-bpy-cp311
           path: |
             bpy_minimal/dist/raw/*.whl
+            bpy_minimal/dist/minimal/*.whl
             bpy_minimal/reports/
             bpy_minimal/logs/
           if-no-files-found: warn

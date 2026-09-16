@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+from email.parser import BytesParser
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -29,6 +30,10 @@ def main() -> None:
         lambda: {"files": 0, "compressed_bytes": 0, "uncompressed_bytes": 0}
     )
     with ZipFile(wheel) as archive:
+        metadata_path = next(
+            name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+        )
+        metadata = BytesParser().parsebytes(archive.read(metadata_path))
         members = []
         for info in archive.infolist():
             if info.is_dir():
@@ -53,6 +58,8 @@ def main() -> None:
         "installed_payload_bytes": uncompressed_bytes,
         "compression_ratio": uncompressed_bytes / compressed_bytes,
         "file_count": len(members),
+        "requires_python": metadata.get("Requires-Python"),
+        "requires_dist": metadata.get_all("Requires-Dist", []),
         "top_level": dict(sorted(groups.items())),
         "largest_uncompressed": sorted(
             members, key=lambda item: item["uncompressed_bytes"], reverse=True
