@@ -8,6 +8,7 @@ readonly ROOT="/validation"
 readonly PYTHON_ABI="${BPY_PYTHON_ABI:-cp311-cp311}"
 readonly PYTHON="/opt/python/${PYTHON_ABI}/bin/python"
 readonly OFFICIAL_PYTHON="/opt/python/cp311-cp311/bin/python"
+readonly NO_DEPS_VENV="/tmp/bpy-no-python-deps-venv"
 readonly FINAL_VENV="/tmp/bpy-final-venv"
 readonly OFFICIAL_VENV="/tmp/bpy-official-venv"
 readonly PYPI_INDEX_URL="${BPY_PYPI_INDEX_URL:-https://pypi.org/simple}"
@@ -22,6 +23,21 @@ readonly WHEEL="${wheels[0]}"
 mkdir -p "${ROOT}/reports" "${ROOT}/downloads/numpy"
 "${PYTHON}" "${ROOT}/scripts/verify_wheel.py" \
   "${WHEEL}" "${ROOT}/reports/final-wheel-integrity.json"
+
+# Zuerst ohne NumPy oder sonstige Drittanbieter-Pythonpakete beweisen, dass die
+# leere Requires-Dist-Liste nicht nur wegen der Notebook-Umgebung funktioniert.
+"${PYTHON}" -m venv "${NO_DEPS_VENV}"
+"${NO_DEPS_VENV}/bin/python" -m pip install --disable-pip-version-check \
+  --no-deps "${WHEEL}"
+"${NO_DEPS_VENV}/bin/python" -m pip check
+"${NO_DEPS_VENV}/bin/python" -c \
+  'import bpy; print("NO_PYTHON_DEPS_IMPORT_OK", bpy.__file__, bpy.app.version_string)'
+"${NO_DEPS_VENV}/bin/python" "${ROOT}/tests/verify_blend.py" \
+  write "${ROOT}/reports/no-python-deps-writer"
+"${NO_DEPS_VENV}/bin/python" "${ROOT}/tests/verify_blend.py" \
+  read "${ROOT}/reports/no-python-deps-writer"
+"${NO_DEPS_VENV}/bin/python" -m pip freeze --all \
+  > "${ROOT}/reports/no-python-deps-pip-freeze.txt"
 
 # Measure the only project-level Python download not already present in a fresh
 # environment.  bpy itself declares no third-party Python runtime dependency.

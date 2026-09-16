@@ -75,6 +75,7 @@ Die abschließende Prüfung läuft in einem zweiten Container, der keinen Zugrif
 auf Quellen, Buildverzeichnis oder Stage-Verzeichnis besitzt. Sie umfasst:
 
 - vollständige ZIP- und `RECORD`-Integritätsprüfung
+- Import und Writer/Reader in einem venv ohne Drittanbieter-Pythonpakete
 - Installation mit `--no-deps`, `pip check` und NumPy 2.0.2
 - den kompletten Writer-/Reader-Vertrag in frischen Prozessen
 - gegenseitiges Lesen mit dem offiziellen `bpy 4.5.3`

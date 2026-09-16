@@ -41,6 +41,7 @@ def main() -> None:
         "isolated_container_without_build_mount": True,
         "wheel_integrity_and_record": True,
         "pip_check": True,
+        "writer_reader_without_third_party_python_packages": True,
         "numpy_2_0_2": True,
         "minimal_writer_reader": True,
         "multiple_exports_one_process": True,
@@ -192,6 +193,7 @@ def main() -> None:
 - Minimal-Writer → offizielles `bpy 4.5.3` und offizieller Writer → Minimal-Reader
 - saubere zweite manylinux-Containerumgebung ohne Quellen-, Build- oder Stage-Mount
 - NumPy 2.0.2, `pip check`, ZIP-Integrität und vollständige `RECORD`-Prüfung
+- Import sowie Writer/Reader ohne irgendein Drittanbieter-Pythonpaket
 - ohne Display, GPU oder installierte Blender-Anwendung
 
 ## Angenommene Kürzungen
