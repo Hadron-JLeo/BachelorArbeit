@@ -11,13 +11,20 @@ readonly PYTHON_VERSION="${BPY_PYTHON_VERSION:-3.11}"
 readonly CONFIG_PROFILE="${BPY_CONFIG_PROFILE:-mesh_export.cmake}"
 readonly PYTHON_ROOT="/opt/python/${PYTHON_ABI}"
 readonly TARGET_PYTHON="${PYTHON_ROOT}/bin/python"
+readonly PYTHON_LIBRARY_STUB="/tmp/bpy-python-module-link/libpython${PYTHON_VERSION}.a"
 
 test -x "${TARGET_PYTHON}"
 test -f "${BLENDER_SOURCE}/CMakeLists.txt"
 test -d "${BLENDER_SOURCE}/lib/linux_x64"
 test -f "${WORK_ROOT}/config/${CONFIG_PROFILE}"
 test -f "${PYTHON_ROOT}/include/python${PYTHON_VERSION}/Python.h"
-test -f "${PYTHON_ROOT}/lib/libpython${PYTHON_VERSION}.so"
+
+# manylinux intentionally does not ship libpython, and a Python extension must
+# not link it. Blender's finder nevertheless requires a library path before it
+# notices WITH_PYTHON_MODULE. An empty archive satisfies configuration; any
+# accidental link against it would still fail and expose the mistake.
+mkdir -p "$(dirname "${PYTHON_LIBRARY_STUB}")"
+ar rcs "${PYTHON_LIBRARY_STUB}"
 
 "${TARGET_PYTHON}" --version
 gcc --version
@@ -33,7 +40,7 @@ cmake -S "${BLENDER_SOURCE}" -B "${BUILD_DIR}" -G Ninja \
   -DPYTHON_EXECUTABLE="${TARGET_PYTHON}" \
   -DPYTHON_INCLUDE_DIR="${PYTHON_ROOT}/include/python${PYTHON_VERSION}" \
   -DPYTHON_INCLUDE_CONFIG_DIR="${PYTHON_ROOT}/include/python${PYTHON_VERSION}" \
-  -DPYTHON_LIBRARY="${PYTHON_ROOT}/lib/libpython${PYTHON_VERSION}.so" \
+  -DPYTHON_LIBRARY="${PYTHON_LIBRARY_STUB}" \
   -DPYTHON_LIBPATH="${PYTHON_ROOT}/lib" \
   -DCMAKE_INSTALL_PREFIX="${STAGE_DIR}" \
   2>&1 | tee "${WORK_ROOT}/logs/configure-base.log"
