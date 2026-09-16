@@ -147,40 +147,6 @@ try_runtime_closure() {
   fi
 }
 
-try_disable_addon_loading() {
-  local name="disable-addon-loading"
-  local before candidate after log removal_manifest patch_report
-  before="$(stage_bytes "${current_stage}")"
-  new_candidate "${name}"
-  candidate="${candidate_path}"
-  log="${WORK_ROOT}/logs/pruning/${name}.log"
-  removal_manifest="${WORK_ROOT}/logs/pruning/${name}-removed.tsv"
-  patch_report="${WORK_ROOT}/reports/disable-addon-loading.json"
-  : > "${removal_manifest}"
-  record_removed_files "${name}" "${candidate}" "${removal_manifest}" \
-    "bpy/4.5/scripts/addons_core"
-
-  "${TARGET_PYTHON}" "${WORK_ROOT}/scripts/disable_addon_loading.py" \
-    "${candidate}/bpy/4.5/scripts/modules/bpy/utils/__init__.py" \
-    "${patch_report}" > "${log}" 2>&1
-  rm -rf -- "${candidate}/bpy/4.5/scripts/addons_core"
-  after="$(stage_bytes "${candidate}")"
-
-  if run_contract "${candidate}" "${name}" >> "${log}" 2>&1 && \
-      runtime_log_is_clean "${log}"; then
-    cat "${removal_manifest}" >> "${REMOVED_FILES}"
-    record_candidate "${name}" ACCEPTED "${before}" "${after}"
-    if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
-      rm -rf -- "${current_stage}"
-    fi
-    current_stage="${candidate}"
-  else
-    record_candidate "${name}" REJECTED "${before}" "${after}"
-    rm -rf -- "${candidate}"
-  fi
-  rm -f -- "${removal_manifest}"
-}
-
 try_remove_python_bytecode() {
   local name="generated-python-bytecode"
   local before candidate after log removal_manifest file relative bytes
@@ -227,7 +193,8 @@ try_remove_python_bytecode() {
 
 try_strip() {
   local name="strip-native-binaries"
-  local before candidate after log
+  local before candidate after log file
+  local xtrace_was_enabled=false
   before="$(stage_bytes "${current_stage}")"
   candidate_number=$((candidate_number + 1))
   candidate="${WORK_ROOT}/stage/prune-${candidate_number}-${name}"
@@ -236,7 +203,18 @@ try_strip() {
   # the last known-good stage.
   cp --archive -- "${current_stage}" "${candidate}"
   log="${WORK_ROOT}/logs/pruning/${name}.log"
-  find "${candidate}/bpy" -type f -name '*.so*' -exec strip --strip-unneeded -- {} +
+  if [[ "$-" == *x* ]]; then
+    xtrace_was_enabled=true
+    set +x
+  fi
+  while IFS= read -r -d '' file; do
+    if readelf --file-header "${file}" >/dev/null 2>&1; then
+      strip --strip-unneeded -- "${file}"
+    fi
+  done < <(find "${candidate}/bpy" -type f -print0)
+  if [[ "${xtrace_was_enabled}" == true ]]; then
+    set -x
+  fi
   after="$(stage_bytes "${candidate}")"
 
   if run_contract "${candidate}" "${name}" >"${log}" 2>&1 && \
@@ -256,16 +234,13 @@ try_strip() {
 # process.  The order starts with the largest known build-installation leakage.
 try_remove python-bundle "bpy/4.5/python"
 try_runtime_closure
-try_disable_addon_loading
-if [[ -d "${current_stage}/bpy/4.5/scripts/addons_core" ]]; then
-  try_remove unused-core-addons \
-    "bpy/4.5/scripts/addons_core/copy_global_transform.py" \
-    "bpy/4.5/scripts/addons_core/hydra_storm" \
-    "bpy/4.5/scripts/addons_core/node_wrangler" \
-    "bpy/4.5/scripts/addons_core/rigify" \
-    "bpy/4.5/scripts/addons_core/ui_translate" \
-    "bpy/4.5/scripts/addons_core/viewport_vr_preview"
-fi
+try_remove unused-core-addons \
+  "bpy/4.5/scripts/addons_core/copy_global_transform.py" \
+  "bpy/4.5/scripts/addons_core/hydra_storm" \
+  "bpy/4.5/scripts/addons_core/node_wrangler" \
+  "bpy/4.5/scripts/addons_core/rigify" \
+  "bpy/4.5/scripts/addons_core/ui_translate" \
+  "bpy/4.5/scripts/addons_core/viewport_vr_preview"
 try_remove presets-and-templates \
   "bpy/4.5/scripts/presets" \
   "bpy/4.5/scripts/templates_osl" \

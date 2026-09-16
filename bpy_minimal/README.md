@@ -39,9 +39,9 @@ Minimal-Reader die Datei des offiziellen Writers. Der genaue Vertrag steht in
 
 Rendering, Simulation, Audio/Video, Asset-Browser, Benutzeroberfläche und der
 Import oder Export fremder Dateiformate gehören ausdrücklich nicht zum
-zugesagten Umfang. Das Laden von Add-ons und App-Templates wird als eigener
-Kürzungskandidat deaktiviert und nur dann übernommen, wenn der vollständige
-Exportvertrag ohne Start- oder Importfehler bestehen bleibt.
+zugesagten Umfang. Die von Blender beim sauberen Start erwarteten Core-Add-ons
+bleiben erhalten; weitere Core-Add-ons werden einzeln als Kürzungskandidat
+geprüft.
 
 ## Reproduzierbarer Build
 
