@@ -37,7 +37,7 @@ run_contract() {
 runtime_log_is_clean() {
   local log="$1"
   ! grep --extended-regexp --ignore-case --quiet \
-    '(^Internal error:|^Error:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
+    '(^Internal error:|^Error:|^Add-on not loaded:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
     "${log}"
 }
 
@@ -91,11 +91,6 @@ record_candidate() {
 }
 
 try_remove() {
-  local keep_empty_directories=false
-  if [[ "$1" == "--keep-empty-directories" ]]; then
-    keep_empty_directories=true
-    shift
-  fi
   local name="$1"
   shift
   local before candidate after log removal_manifest
@@ -108,9 +103,6 @@ try_remove() {
   record_removed_files "${name}" "${candidate}" "${removal_manifest}" "$@"
   for relative_path in "$@"; do
     rm -rf -- "${candidate}/${relative_path}"
-    if [[ "${keep_empty_directories}" == true ]]; then
-      mkdir -p -- "${candidate}/${relative_path}"
-    fi
   done
   after="$(stage_bytes "${candidate}")"
 
@@ -186,7 +178,13 @@ try_strip() {
 # process.  The order starts with the largest known build-installation leakage.
 try_remove python-bundle "bpy/4.5/python"
 try_runtime_closure
-try_remove --keep-empty-directories addons-core "bpy/4.5/scripts/addons_core"
+try_remove unused-core-addons \
+  "bpy/4.5/scripts/addons_core/copy_global_transform.py" \
+  "bpy/4.5/scripts/addons_core/hydra_storm" \
+  "bpy/4.5/scripts/addons_core/node_wrangler" \
+  "bpy/4.5/scripts/addons_core/rigify" \
+  "bpy/4.5/scripts/addons_core/ui_translate" \
+  "bpy/4.5/scripts/addons_core/viewport_vr_preview"
 try_remove presets-and-templates \
   "bpy/4.5/scripts/presets" \
   "bpy/4.5/scripts/templates_osl" \

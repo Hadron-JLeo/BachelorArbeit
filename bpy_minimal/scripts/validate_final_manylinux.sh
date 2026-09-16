@@ -10,6 +10,7 @@ readonly PYTHON="/opt/python/${PYTHON_ABI}/bin/python"
 readonly OFFICIAL_PYTHON="/opt/python/cp311-cp311/bin/python"
 readonly FINAL_VENV="/tmp/bpy-final-venv"
 readonly OFFICIAL_VENV="/tmp/bpy-official-venv"
+readonly PYPI_INDEX_URL="${BPY_PYPI_INDEX_URL:-https://pypi.org/simple}"
 
 unset PYTHONPATH
 unset LD_LIBRARY_PATH
@@ -25,7 +26,8 @@ mkdir -p "${ROOT}/reports" "${ROOT}/downloads/numpy"
 # Measure the only project-level Python download not already present in a fresh
 # environment.  bpy itself declares no third-party Python runtime dependency.
 "${PYTHON}" -m pip download --disable-pip-version-check --no-cache-dir \
-  --only-binary=:all: --no-deps --dest "${ROOT}/downloads/numpy" 'numpy==2.0.2'
+  --index-url "${PYPI_INDEX_URL}" --only-binary=:all: --no-deps \
+  --dest "${ROOT}/downloads/numpy" 'numpy==2.0.2'
 
 "${PYTHON}" -m venv "${FINAL_VENV}"
 "${FINAL_VENV}/bin/python" -m pip install --disable-pip-version-check --no-index \
@@ -70,7 +72,7 @@ dnf install -y \
   mesa-libGL
 "${OFFICIAL_PYTHON}" -m venv "${OFFICIAL_VENV}"
 "${OFFICIAL_VENV}/bin/python" -m pip install --disable-pip-version-check \
-  'bpy==4.5.3'
+  --index-url "${PYPI_INDEX_URL}" 'bpy==4.5.3'
 "${OFFICIAL_VENV}/bin/python" -m pip check
 official_extension="$(find "${OFFICIAL_VENV}" -path '*/site-packages/bpy/__init__.so' -print -quit)"
 test -n "${official_extension}"
@@ -90,9 +92,10 @@ ldd "${official_extension}" | tee "${ROOT}/reports/official-bpy-ldd.txt"
   --repetitions 5
 "${FINAL_VENV}/bin/python" -m pip freeze > "${ROOT}/reports/final-pip-freeze.txt"
 "${OFFICIAL_VENV}/bin/python" -m pip freeze > "${ROOT}/reports/official-pip-freeze.txt"
+printf '%s\n' "${PYPI_INDEX_URL}" > "${ROOT}/reports/python-package-index.txt"
 
 "${PYTHON}" - "${WHEEL}" "${ROOT}/downloads/numpy" \
-  "${ROOT}/reports/download-sizes.json" <<'PY'
+  "${ROOT}/reports/download-sizes.json" "${PYPI_INDEX_URL}" <<'PY'
 from hashlib import sha256
 import json
 from pathlib import Path
@@ -108,6 +111,8 @@ result = {
     "bpy_total_fresh_environment_download_bytes": wheel.stat().st_size,
     "numpy_2_0_2_wheel": numpy_wheel.name,
     "numpy_2_0_2_bytes": numpy_wheel.stat().st_size,
+    "numpy_2_0_2_sha256": sha256(numpy_wheel.read_bytes()).hexdigest(),
+    "python_package_index": sys.argv[4],
     "project_total_without_preinstalled_numpy_bytes": (
         wheel.stat().st_size + numpy_wheel.stat().st_size
     ),

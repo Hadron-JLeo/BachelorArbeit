@@ -46,6 +46,10 @@ def main() -> None:
         "multiple_exports_one_process": True,
         "cross_reader_both_directions": True,
         "five_fresh_import_processes": True,
+        # The workflow changes this to false only after its independent grep
+        # gate has completed.  A failed or skipped gate therefore cannot leave
+        # behind a falsely positive machine-readable claim.
+        "severe_runtime_log_patterns": None,
     }
     (validation / "validation-result.json").write_text(
         json.dumps(validation_result, indent=2), encoding="utf-8"

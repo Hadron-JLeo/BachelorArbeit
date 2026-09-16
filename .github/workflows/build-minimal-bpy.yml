@@ -110,6 +110,7 @@ jobs:
           cp bpy_minimal/scripts/verify_wheel.py bpy_minimal/validation/scripts/
           cp bpy_minimal/scripts/measure_import.py bpy_minimal/validation/scripts/
           cp bpy_minimal/scripts/generate_build_report.py bpy_minimal/validation/scripts/
+          cp bpy_minimal/scripts/finalize_validation_report.py bpy_minimal/validation/scripts/
           cp bpy_minimal/scripts/validate_final_manylinux.sh bpy_minimal/validation/scripts/
           cp bpy_minimal/tests/verify_blend.py bpy_minimal/validation/tests/
           cp -a bpy_minimal/reports/. bpy_minimal/validation/build-reports/
@@ -127,8 +128,12 @@ jobs:
             /bin/bash /validation/scripts/validate_final_manylinux.sh \
             2>&1 | tee bpy_minimal/validation/reports/validation.log
           ! grep --extended-regexp --ignore-case --quiet \
-            '(^Internal error:|^Error:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
+            '(^Internal error:|^Error:|^Add-on not loaded:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
             bpy_minimal/validation/reports/validation.log
+          python3 bpy_minimal/scripts/finalize_validation_report.py \
+            bpy_minimal/validation/reports/validation-result.json \
+            bpy_minimal/validation/reports/build-result.json \
+            bpy_minimal/validation/reports/BUILD_REPORT.md
 
       - name: Publish failure diagnostic
         if: failure()
