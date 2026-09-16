@@ -2,7 +2,8 @@
 set -euo pipefail
 
 readonly WORK_ROOT="/work"
-readonly TARGET_PYTHON="/opt/python/cp311-cp311/bin/python"
+readonly PYTHON_ABI="${BPY_PYTHON_ABI:-cp311-cp311}"
+readonly TARGET_PYTHON="/opt/python/${PYTHON_ABI}/bin/python"
 readonly STAGE_DIR="${WORK_ROOT}/stage/base"
 readonly BUILD_DIR="${WORK_ROOT}/build/base"
 readonly SOURCE_DIR="${WORK_ROOT}/source/blender"
@@ -37,3 +38,10 @@ readonly WHEEL="${wheels[0]}"
   | tee "${WORK_ROOT}/reports/baseline-wheel.txt"
 "${TARGET_PYTHON}" -m auditwheel show "${WHEEL}" \
   | tee "${WORK_ROOT}/reports/auditwheel-show.txt"
+
+# setuptools writes a second package copy below INSTALL_DIR/build.  Keeping
+# that directory would make later pruning appear successful while the final
+# wheel silently reused the stale, unpruned baseline payload.
+rm -rf -- "${STAGE_DIR}/build" "${STAGE_DIR}/bpy.egg-info"
+test ! -e "${STAGE_DIR}/build"
+test ! -e "${STAGE_DIR}/bpy.egg-info"

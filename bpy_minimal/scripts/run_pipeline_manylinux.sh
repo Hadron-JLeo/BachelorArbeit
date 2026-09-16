@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Alle Schritte laufen absichtlich im selben kurzlebigen Container.
-export PATH="/opt/python/cp311-cp311/bin:${PATH}"
+readonly PYTHON_ABI="${BPY_PYTHON_ABI:-cp311-cp311}"
+export PATH="/opt/python/${PYTHON_ABI}/bin:${PATH}"
 
 /bin/bash -x /work/scripts/bootstrap_manylinux.sh
 /bin/bash -x /work/scripts/configure_manylinux.sh

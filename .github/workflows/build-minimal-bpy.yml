@@ -17,6 +17,26 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cp311-standard
+            python_abi: cp311-cp311
+            python_version: "3.11"
+            config_profile: mesh_export.cmake
+            experimental: false
+          - name: cp311-no-opengl
+            python_abi: cp311-cp311
+            python_version: "3.11"
+            config_profile: mesh_export_no_opengl.cmake
+            experimental: true
+          - name: cp312-standard
+            python_abi: cp312-cp312
+            python_version: "3.12"
+            config_profile: mesh_export.cmake
+            experimental: true
     permissions:
       contents: read
 
@@ -65,9 +85,42 @@ jobs:
             --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal,dst=/work" \
             --workdir /work \
             -e BPY_BUILD_JOBS=4 \
+            -e BPY_BUILD_VARIANT="${{ matrix.name }}" \
+            -e BPY_PYTHON_ABI="${{ matrix.python_abi }}" \
+            -e BPY_PYTHON_VERSION="${{ matrix.python_version }}" \
+            -e BPY_CONFIG_PROFILE="${{ matrix.config_profile }}" \
             "$MANYLINUX_IMAGE" \
             /bin/bash /work/scripts/run_pipeline_manylinux.sh \
             2>&1 | tee bpy_minimal/logs/pipeline.log
+
+      - name: Prepare isolated validation payload
+        run: |
+          mkdir -p \
+            bpy_minimal/validation/input \
+            bpy_minimal/validation/scripts \
+            bpy_minimal/validation/tests \
+            bpy_minimal/validation/build-reports \
+            bpy_minimal/validation/reports
+          cp bpy_minimal/dist/minimal/*.whl bpy_minimal/validation/input/
+          cp bpy_minimal/scripts/verify_wheel.py bpy_minimal/validation/scripts/
+          cp bpy_minimal/scripts/measure_import.py bpy_minimal/validation/scripts/
+          cp bpy_minimal/scripts/generate_build_report.py bpy_minimal/validation/scripts/
+          cp bpy_minimal/scripts/validate_final_manylinux.sh bpy_minimal/validation/scripts/
+          cp bpy_minimal/tests/verify_blend.py bpy_minimal/validation/tests/
+          cp -a bpy_minimal/reports/. bpy_minimal/validation/build-reports/
+
+      - name: Validate final wheel without build-tree access
+        env:
+          MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+        run: |
+          set -o pipefail
+          docker run --rm \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal/validation,dst=/validation" \
+            --workdir /validation \
+            -e BPY_PYTHON_ABI="${{ matrix.python_abi }}" \
+            "$MANYLINUX_IMAGE" \
+            /bin/bash /validation/scripts/validate_final_manylinux.sh \
+            2>&1 | tee bpy_minimal/validation/reports/validation.log
 
       - name: Publish failure diagnostic
         if: failure()
@@ -78,6 +131,9 @@ jobs:
             echo '```text'
             tail -n 160 bpy_minimal/logs/pipeline.log 2>/dev/null || \
               echo 'pipeline.log was not created'
+            echo
+            tail -n 160 bpy_minimal/validation/reports/validation.log 2>/dev/null || \
+              echo 'validation.log was not created'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -85,11 +141,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: minimal-bpy-cp311
+          name: minimal-bpy-${{ matrix.name }}
           path: |
-            bpy_minimal/dist/raw/*.whl
             bpy_minimal/dist/minimal/*.whl
             bpy_minimal/reports/
             bpy_minimal/logs/
+            bpy_minimal/validation/reports/
           if-no-files-found: warn
           retention-days: 7

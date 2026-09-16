@@ -2,10 +2,12 @@
 set -euo pipefail
 
 readonly WORK_ROOT="/work"
-readonly TARGET_PYTHON="/opt/python/cp311-cp311/bin/python"
+readonly PYTHON_ABI="${BPY_PYTHON_ABI:-cp311-cp311}"
+readonly TARGET_PYTHON="/opt/python/${PYTHON_ABI}/bin/python"
 readonly BASE_STAGE="${WORK_ROOT}/stage/base"
 readonly SOURCE_DIR="${WORK_ROOT}/source/blender"
 readonly RESULTS="${WORK_ROOT}/reports/pruning-results.tsv"
+readonly REMOVED_FILES="${WORK_ROOT}/reports/pruned-files.tsv"
 
 current_stage="${BASE_STAGE}"
 candidate_number=0
@@ -13,6 +15,7 @@ candidate_path=""
 
 mkdir -p "${WORK_ROOT}/reports/pruning-models" "${WORK_ROOT}/logs/pruning"
 printf 'candidate\tresult\tbefore_bytes\tafter_bytes\tsaved_bytes\n' > "${RESULTS}"
+printf 'candidate\tpath\tbytes\treason\n' > "${REMOVED_FILES}"
 
 stage_bytes() {
   du --bytes --summarize "$1" | cut -f1
@@ -29,6 +32,38 @@ run_contract() {
     "${WORK_ROOT}/tests/verify_blend.py" write "${model_dir}"
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="${stage}" "${TARGET_PYTHON}" \
     "${WORK_ROOT}/tests/verify_blend.py" read "${model_dir}"
+}
+
+runtime_log_is_clean() {
+  local log="$1"
+  ! grep --extended-regexp --ignore-case --quiet \
+    '(Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found)|Error: Failed)' \
+    "${log}"
+}
+
+record_removed_files() {
+  local name="$1"
+  local stage="$2"
+  local output="$3"
+  shift 3
+  local relative_path target file relative bytes
+  for relative_path in "$@"; do
+    target="${stage}/${relative_path}"
+    if [[ -d "${target}" ]]; then
+      while IFS= read -r -d '' file; do
+        relative="${file#"${stage}/"}"
+        bytes="$(stat --dereference --format='%s' "${file}")"
+        printf '%s\t%s\t%s\t%s\n' \
+          "${name}" "${relative}" "${bytes}" 'not required by the tested export contract' \
+          >> "${output}"
+      done < <(find "${target}" \( -type f -o -type l \) -print0)
+    elif [[ -e "${target}" || -L "${target}" ]]; then
+      bytes="$(stat --dereference --format='%s' "${target}")"
+      printf '%s\t%s\t%s\t%s\n' \
+        "${name}" "${relative_path}" "${bytes}" 'not required by the tested export contract' \
+        >> "${output}"
+    fi
+  done
 }
 
 new_candidate() {
@@ -51,17 +86,22 @@ record_candidate() {
 try_remove() {
   local name="$1"
   shift
-  local before candidate after log
+  local before candidate after log removal_manifest
   before="$(stage_bytes "${current_stage}")"
   new_candidate "${name}"
   candidate="${candidate_path}"
   log="${WORK_ROOT}/logs/pruning/${name}.log"
+  removal_manifest="${WORK_ROOT}/logs/pruning/${name}-removed.tsv"
+  : > "${removal_manifest}"
+  record_removed_files "${name}" "${candidate}" "${removal_manifest}" "$@"
   for relative_path in "$@"; do
     rm -rf -- "${candidate}/${relative_path}"
   done
   after="$(stage_bytes "${candidate}")"
 
-  if run_contract "${candidate}" "${name}" >"${log}" 2>&1; then
+  if run_contract "${candidate}" "${name}" >"${log}" 2>&1 && \
+      runtime_log_is_clean "${log}"; then
+    cat "${removal_manifest}" >> "${REMOVED_FILES}"
     record_candidate "${name}" ACCEPTED "${before}" "${after}"
     if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
       rm -rf -- "${current_stage}"
@@ -71,6 +111,7 @@ try_remove() {
     record_candidate "${name}" REJECTED "${before}" "${after}"
     rm -rf -- "${candidate}"
   fi
+  rm -f -- "${removal_manifest}"
 }
 
 try_runtime_closure() {
@@ -84,7 +125,8 @@ try_runtime_closure() {
 
   if "${TARGET_PYTHON}" "${WORK_ROOT}/scripts/prune_runtime_libs.py" \
       "${candidate}" "${closure_report}" >"${log}" 2>&1 && \
-      run_contract "${candidate}" "${name}" >>"${log}" 2>&1; then
+      run_contract "${candidate}" "${name}" >>"${log}" 2>&1 && \
+      runtime_log_is_clean "${log}"; then
     after="$(stage_bytes "${candidate}")"
     record_candidate "${name}" ACCEPTED "${before}" "${after}"
     if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
@@ -112,7 +154,8 @@ try_strip() {
   find "${candidate}/bpy" -type f -name '*.so*' -exec strip --strip-unneeded -- {} +
   after="$(stage_bytes "${candidate}")"
 
-  if run_contract "${candidate}" "${name}" >"${log}" 2>&1; then
+  if run_contract "${candidate}" "${name}" >"${log}" 2>&1 && \
+      runtime_log_is_clean "${log}"; then
     record_candidate "${name}" ACCEPTED "${before}" "${after}"
     if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
       rm -rf -- "${current_stage}"
@@ -174,18 +217,51 @@ try_strip
 readonly MINIMAL_STAGE="${WORK_ROOT}/stage/minimal"
 rm -rf -- "${MINIMAL_STAGE}"
 cp --archive --link -- "${current_stage}" "${MINIMAL_STAGE}"
+mkdir -p "${MINIMAL_STAGE}/bpy/licenses/third_party"
+cp -- "${SOURCE_DIR}/release/text/copyright.txt" \
+  "${MINIMAL_STAGE}/bpy/licenses/copyright.txt"
+cp --archive -- "${SOURCE_DIR}/release/license/." \
+  "${MINIMAL_STAGE}/bpy/licenses/third_party/"
+# Defense in depth against stale setuptools output inherited from an earlier
+# packaging run.  The wheel must be assembled only from the tested bpy tree.
+rm -rf -- "${MINIMAL_STAGE}/build" "${MINIMAL_STAGE}/bpy.egg-info"
 run_contract "${MINIMAL_STAGE}" final-minimal \
   >"${WORK_ROOT}/logs/pruning/final-minimal.log" 2>&1
+runtime_log_is_clean "${WORK_ROOT}/logs/pruning/final-minimal.log"
 
-mkdir -p "${WORK_ROOT}/dist/minimal"
+mkdir -p \
+  "${WORK_ROOT}/dist/minimal-raw" \
+  "${WORK_ROOT}/dist/minimal-deflate9" \
+  "${WORK_ROOT}/dist/minimal-zopfli" \
+  "${WORK_ROOT}/dist/minimal"
 SOURCE_DATE_EPOCH=1757335597 "${TARGET_PYTHON}" \
   "${SOURCE_DIR}/build_files/utils/make_bpy_wheel.py" \
   "${MINIMAL_STAGE}" --build-dir "${WORK_ROOT}/build/base" \
-  --output-dir "${WORK_ROOT}/dist/minimal"
+  --output-dir "${WORK_ROOT}/dist/minimal-raw"
 
-wheels=("${WORK_ROOT}"/dist/minimal/*.whl)
+wheels=("${WORK_ROOT}"/dist/minimal-raw/*.whl)
 test "${#wheels[@]}" -eq 1
-readonly WHEEL="${wheels[0]}"
+readonly RAW_WHEEL="${wheels[0]}"
+readonly WHEEL_NAME="$(basename "${RAW_WHEEL}")"
+readonly DEFLATE9_WHEEL="${WORK_ROOT}/dist/minimal-deflate9/${WHEEL_NAME}"
+readonly ZOPFLI_WHEEL="${WORK_ROOT}/dist/minimal-zopfli/${WHEEL_NAME}"
+
+"${TARGET_PYTHON}" "${WORK_ROOT}/scripts/repack_wheel.py" \
+  "${RAW_WHEEL}" "${DEFLATE9_WHEEL}" "${WORK_ROOT}/reports/repack-deflate9.json" \
+  --mode deflate9
+"${TARGET_PYTHON}" "${WORK_ROOT}/scripts/repack_wheel.py" \
+  "${RAW_WHEEL}" "${ZOPFLI_WHEEL}" "${WORK_ROOT}/reports/repack-zopfli.json" \
+  --mode zopfli --iterations 15
+
+smallest_wheel="${RAW_WHEEL}"
+for candidate in "${DEFLATE9_WHEEL}" "${ZOPFLI_WHEEL}"; do
+  if [[ "$(stat --format='%s' "${candidate}")" -lt \
+        "$(stat --format='%s' "${smallest_wheel}")" ]]; then
+    smallest_wheel="${candidate}"
+  fi
+done
+cp -- "${smallest_wheel}" "${WORK_ROOT}/dist/minimal/${WHEEL_NAME}"
+readonly WHEEL="${WORK_ROOT}/dist/minimal/${WHEEL_NAME}"
 
 "${TARGET_PYTHON}" "${WORK_ROOT}/scripts/analyze_wheel.py" \
   "${WHEEL}" "${WORK_ROOT}/reports/minimal-wheel.json" \

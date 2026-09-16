@@ -4,5 +4,8 @@
 /reports/
 /source/
 /stage/
+/validation/
+/venv/
+/downloads/
 __pycache__/
 *.pyc

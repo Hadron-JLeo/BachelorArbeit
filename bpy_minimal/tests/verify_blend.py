@@ -203,8 +203,16 @@ def read(folder: Path) -> None:
     print("READ_OK", bpy.__file__, bpy.app.version_string)
 
 
+def multi(folder: Path) -> None:
+    """Zwei vollständige Exporte im selben Interpreterprozess ausführen."""
+    write(folder / "first")
+    write(folder / "second")
+    print("MULTI_WRITE_OK", bpy.__file__, bpy.app.version_string)
+
+
 if __name__ == "__main__":
     mode, directory = sys.argv[1:]
-    if mode not in {"write", "read"}:
-        raise ValueError("mode must be 'write' or 'read'")
-    (write if mode == "write" else read)(Path(directory))
+    actions = {"write": write, "read": read, "multi": multi}
+    if mode not in actions:
+        raise ValueError("mode must be 'write', 'read' or 'multi'")
+    actions[mode](Path(directory))
