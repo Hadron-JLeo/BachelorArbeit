@@ -181,6 +181,50 @@ try_disable_addon_loading() {
   rm -f -- "${removal_manifest}"
 }
 
+try_remove_python_bytecode() {
+  local name="generated-python-bytecode"
+  local before candidate after log removal_manifest file relative bytes
+  local xtrace_was_enabled=false
+  before="$(stage_bytes "${current_stage}")"
+  new_candidate "${name}"
+  candidate="${candidate_path}"
+  log="${WORK_ROOT}/logs/pruning/${name}.log"
+  removal_manifest="${WORK_ROOT}/logs/pruning/${name}-removed.tsv"
+  : > "${removal_manifest}"
+
+  if [[ "$-" == *x* ]]; then
+    xtrace_was_enabled=true
+    set +x
+  fi
+  while IFS= read -r -d '' file; do
+    relative="${file#"${candidate}/"}"
+    bytes="$(stat --format='%s' "${file}")"
+    printf '%s\t%s\t%s\t%s\n' \
+      "${name}" "${relative}" "${bytes}" \
+      'generated cache; Python source is retained' >> "${removal_manifest}"
+    rm -f -- "${file}"
+  done < <(find "${candidate}/bpy" -type f -name '*.pyc' -print0)
+  find "${candidate}/bpy" -type d -name '__pycache__' -empty -delete
+  if [[ "${xtrace_was_enabled}" == true ]]; then
+    set -x
+  fi
+  after="$(stage_bytes "${candidate}")"
+
+  if run_contract "${candidate}" "${name}" > "${log}" 2>&1 && \
+      runtime_log_is_clean "${log}"; then
+    cat "${removal_manifest}" >> "${REMOVED_FILES}"
+    record_candidate "${name}" ACCEPTED "${before}" "${after}"
+    if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
+      rm -rf -- "${current_stage}"
+    fi
+    current_stage="${candidate}"
+  else
+    record_candidate "${name}" REJECTED "${before}" "${after}"
+    rm -rf -- "${candidate}"
+  fi
+  rm -f -- "${removal_manifest}"
+}
+
 try_strip() {
   local name="strip-native-binaries"
   local before candidate after log
@@ -262,6 +306,7 @@ try_remove optional-assets \
   "bpy/4.5/datafiles/studiolights"
 try_remove interface-fonts "bpy/4.5/datafiles/fonts"
 try_remove color-management "bpy/4.5/datafiles/colormanagement"
+try_remove_python_bytecode
 try_strip
 
 readonly MINIMAL_STAGE="${WORK_ROOT}/stage/minimal"

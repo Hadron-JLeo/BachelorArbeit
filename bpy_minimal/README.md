@@ -71,7 +71,8 @@ Laufzeitbestandteile einzeln entfernt. Eine Kürzung wird nur übernommen, wenn
 Import, Writer, Reader und Mehrfachexport weiterhin bestehen und das Protokoll
 keine schwerwiegenden Laufzeitfehler enthält. Native Bibliotheken werden auf die
 tatsächliche ELF-Abhängigkeitskette reduziert; danach werden die Binärdateien
-gestrippt und das Wheel deterministisch neu komprimiert.
+gestrippt, doppelte generierte Python-Bytecode-Caches entfernt und das Wheel
+deterministisch neu komprimiert.
 
 Die abschließende Prüfung läuft in einem zweiten Container, der keinen Zugriff
 auf Quellen, Buildverzeichnis oder Stage-Verzeichnis besitzt. Sie umfasst:
