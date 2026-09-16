@@ -147,6 +147,40 @@ try_runtime_closure() {
   fi
 }
 
+try_disable_addon_loading() {
+  local name="disable-addon-loading"
+  local before candidate after log removal_manifest patch_report
+  before="$(stage_bytes "${current_stage}")"
+  new_candidate "${name}"
+  candidate="${candidate_path}"
+  log="${WORK_ROOT}/logs/pruning/${name}.log"
+  removal_manifest="${WORK_ROOT}/logs/pruning/${name}-removed.tsv"
+  patch_report="${WORK_ROOT}/reports/disable-addon-loading.json"
+  : > "${removal_manifest}"
+  record_removed_files "${name}" "${candidate}" "${removal_manifest}" \
+    "bpy/4.5/scripts/addons_core"
+
+  "${TARGET_PYTHON}" "${WORK_ROOT}/scripts/disable_addon_loading.py" \
+    "${candidate}/bpy/4.5/scripts/modules/bpy/utils/__init__.py" \
+    "${patch_report}" > "${log}" 2>&1
+  rm -rf -- "${candidate}/bpy/4.5/scripts/addons_core"
+  after="$(stage_bytes "${candidate}")"
+
+  if run_contract "${candidate}" "${name}" >> "${log}" 2>&1 && \
+      runtime_log_is_clean "${log}"; then
+    cat "${removal_manifest}" >> "${REMOVED_FILES}"
+    record_candidate "${name}" ACCEPTED "${before}" "${after}"
+    if [[ "${current_stage}" != "${BASE_STAGE}" ]]; then
+      rm -rf -- "${current_stage}"
+    fi
+    current_stage="${candidate}"
+  else
+    record_candidate "${name}" REJECTED "${before}" "${after}"
+    rm -rf -- "${candidate}"
+  fi
+  rm -f -- "${removal_manifest}"
+}
+
 try_strip() {
   local name="strip-native-binaries"
   local before candidate after log
@@ -178,13 +212,16 @@ try_strip() {
 # process.  The order starts with the largest known build-installation leakage.
 try_remove python-bundle "bpy/4.5/python"
 try_runtime_closure
-try_remove unused-core-addons \
-  "bpy/4.5/scripts/addons_core/copy_global_transform.py" \
-  "bpy/4.5/scripts/addons_core/hydra_storm" \
-  "bpy/4.5/scripts/addons_core/node_wrangler" \
-  "bpy/4.5/scripts/addons_core/rigify" \
-  "bpy/4.5/scripts/addons_core/ui_translate" \
-  "bpy/4.5/scripts/addons_core/viewport_vr_preview"
+try_disable_addon_loading
+if [[ -d "${current_stage}/bpy/4.5/scripts/addons_core" ]]; then
+  try_remove unused-core-addons \
+    "bpy/4.5/scripts/addons_core/copy_global_transform.py" \
+    "bpy/4.5/scripts/addons_core/hydra_storm" \
+    "bpy/4.5/scripts/addons_core/node_wrangler" \
+    "bpy/4.5/scripts/addons_core/rigify" \
+    "bpy/4.5/scripts/addons_core/ui_translate" \
+    "bpy/4.5/scripts/addons_core/viewport_vr_preview"
+fi
 try_remove presets-and-templates \
   "bpy/4.5/scripts/presets" \
   "bpy/4.5/scripts/templates_osl" \
