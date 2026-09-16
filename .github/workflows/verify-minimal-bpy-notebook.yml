@@ -31,6 +31,7 @@ jobs:
         env:
           MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
         run: |
+          set -o pipefail
           docker pull "$MANYLINUX_IMAGE"
           mkdir -p "$GITHUB_WORKSPACE/bpy_minimal/notebook-validation/${{ matrix.name }}"
           docker run --rm \
@@ -39,7 +40,11 @@ jobs:
             --workdir /output \
             -e BPY_PYTHON_ABI="${{ matrix.python_abi }}" \
             "$MANYLINUX_IMAGE" \
-            /bin/bash /repository/bpy_minimal/scripts/validate_notebook_manylinux.sh
+            /bin/bash /repository/bpy_minimal/scripts/validate_notebook_manylinux.sh \
+            2>&1 | tee "$GITHUB_WORKSPACE/bpy_minimal/notebook-validation/${{ matrix.name }}/notebook-validation.log"
+          ! grep --extended-regexp --ignore-case --quiet \
+            '(^Internal error:|^Error:|^Add-on not loaded:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
+            "$GITHUB_WORKSPACE/bpy_minimal/notebook-validation/${{ matrix.name }}/notebook-validation.log"
 
       - name: Upload notebook evidence
         if: always()
