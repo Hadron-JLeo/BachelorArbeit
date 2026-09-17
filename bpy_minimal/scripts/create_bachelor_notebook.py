@@ -89,14 +89,16 @@ cells = [
 
         Die erste Zelle installiert die Projektmodule aus dem Wurzelverzeichnis
         des Repositories. Deshalb wird **kein** `#subdirectory=imports` verwendet.
-        Das Extra `visualization` ergänzt die bereits vorhandene Open3D-/Plotly-
-        Darstellung. `%pip` installiert in den aktiven Notebook-Kernel.
+        Open3D, Plotly und `nbformat` ergänzen die interaktive Darstellung.
+        `%pip` installiert in den aktiven Notebook-Kernel. Die Pakete stehen
+        bewusst explizit im Befehl, damit das Notebook schon vor der Übernahme der
+        korrigierten optionalen Abhängigkeiten in `main` ausführbar ist.
         """,
     ),
     code(
         "install-project",
         """
-        %pip install --upgrade --no-cache-dir "hypercube-graph-surface[visualization] @ git+https://github.com/Hadron-JLeo/BachelorArbeit.git@main"
+        %pip install --upgrade --no-cache-dir "hypercube-graph-surface @ git+https://github.com/Hadron-JLeo/BachelorArbeit.git@main" "open3d==0.19.0" "plotly==6.3.0" "nbformat==5.10.4"
         """,
     ),
     markdown(
