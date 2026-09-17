@@ -50,10 +50,11 @@ jobs:
           validation_status=${PIPESTATUS[0]}
           set -e
           if (( validation_status != 0 )); then
-            while IFS= read -r line; do
-              line=${line//'%'/'%25'}
-              printf '::error title=Notebook validation log::%s\n' "$line"
-            done < <(tail -n 35 "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log")
+            diagnostic=$(tail -n 80 "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log")
+            diagnostic=${diagnostic//'%'/'%25'}
+            diagnostic=${diagnostic//$'\r'/'%0D'}
+            diagnostic=${diagnostic//$'\n'/'%0A'}
+            printf '::error title=Notebook validation log::%s\n' "$diagnostic"
             exit "$validation_status"
           fi
           grep --fixed-strings --quiet \
