@@ -45,6 +45,7 @@ output_root = Path(os.environ["BACHELOR_NOTEBOOK_OUTPUT"])
 blend_path = output_root / "blender_export/Q4_Hypercube_Polygonfamilie.blend"
 json_path = blend_path.with_suffix(".json")
 source = json.loads(json_path.read_text(encoding="utf-8"))
+assert source["schema_version"] == 3
 
 assert bpy.ops.wm.open_mainfile(filepath=str(blend_path)) == {"FINISHED"}
 assert bpy.context.scene.name == "Q4_Polygonfamilie"
@@ -84,10 +85,7 @@ for record in source["polygons"]:
             for axis in range(3)
         ), (obj.name, tuple(actual), expected)
 
-assert "NumPy_Quelldaten.json" in bpy.data.texts
-assert "LIESMICH_Blender" in bpy.data.texts
-embedded = json.loads(bpy.data.texts["NumPy_Quelldaten.json"].as_string())
-assert embedded == source
+assert len(bpy.data.texts) == 0
 
 print(
     "BACHELOR_NOTEBOOK_READER_OK",
