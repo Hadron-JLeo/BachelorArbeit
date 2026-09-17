@@ -38,6 +38,7 @@ jobs:
           set -o pipefail
           docker pull "$MANYLINUX_IMAGE"
           mkdir -p "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}"
+          set +e
           docker run --rm \
             --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/repository,readonly" \
             --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }},dst=/output" \
@@ -46,6 +47,15 @@ jobs:
             "$MANYLINUX_IMAGE" \
             /bin/bash /repository/bpy_minimal/scripts/validate_bachelor_notebook_manylinux.sh \
             2>&1 | tee "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log"
+          validation_status=${PIPESTATUS[0]}
+          set -e
+          if (( validation_status != 0 )); then
+            while IFS= read -r line; do
+              line=${line//'%'/'%25'}
+              printf '::error title=Notebook validation log::%s\n' "$line"
+            done < <(tail -n 35 "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log")
+            exit "$validation_status"
+          fi
           grep --fixed-strings --quiet \
             'BACHELOR_NOTEBOOK_VALIDATION_OK' \
             "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log"
