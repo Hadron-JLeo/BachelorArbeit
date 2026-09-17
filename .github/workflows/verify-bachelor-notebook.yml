@@ -1,0 +1,63 @@
+name: Verify complete bachelor notebook
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/minimal-bpy
+    paths:
+      - Hypercube-graph-bpy-minimal.ipynb
+      - bpy_minimal/scripts/create_bachelor_notebook.py
+      - bpy_minimal/scripts/execute_notebook_smoke.py
+      - bpy_minimal/scripts/validate_bachelor_notebook_manylinux.sh
+      - .github/workflows/verify-bachelor-notebook.yml
+
+jobs:
+  notebook:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: cp311
+            python_abi: cp311-cp311
+          - name: cp312
+            python_abi: cp312-cp312
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Execute and inspect complete notebook
+        env:
+          MANYLINUX_IMAGE: quay.io/pypa/manylinux_2_28_x86_64@sha256:531d7aa844bbb0c131d4ab011d3db741c4abc8d498cd5ccc86121046f62303b4
+        run: |
+          set -o pipefail
+          docker pull "$MANYLINUX_IMAGE"
+          mkdir -p "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}"
+          docker run --rm \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/repository,readonly" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }},dst=/output" \
+            --workdir /output \
+            -e BPY_PYTHON_ABI="${{ matrix.python_abi }}" \
+            "$MANYLINUX_IMAGE" \
+            /bin/bash /repository/bpy_minimal/scripts/validate_bachelor_notebook_manylinux.sh \
+            2>&1 | tee "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log"
+          grep --fixed-strings --quiet \
+            'BACHELOR_NOTEBOOK_VALIDATION_OK' \
+            "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log"
+          ! grep --extended-regexp --ignore-case --quiet \
+            '(^Internal error:|^Error:|^Add-on not loaded:|Traceback|ModuleNotFoundError|ImportError|Segmentation fault|undefined symbol|cannot open shared object|Color management:.*(fail|error|missing|not found))' \
+            "$GITHUB_WORKSPACE/bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/validation.log"
+
+      - name: Upload notebook evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bachelor-notebook-${{ matrix.name }}
+          path: bpy_minimal/bachelor-notebook-validation/${{ matrix.name }}/
+          if-no-files-found: error
+          retention-days: 30
