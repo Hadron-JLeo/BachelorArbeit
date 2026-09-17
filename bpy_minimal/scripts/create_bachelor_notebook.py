@@ -83,22 +83,22 @@ cells = [
 
         Die Zellen werden von oben nach unten in einer frischen Sitzung
         ausgeführt. Unterstützt werden Linux x86_64 mit glibc 2.28 oder neuer und
-        CPython 3.11 beziehungsweise 3.12. Google Colab erfüllt diese
+        CPython 3.11 beziehungsweise 3.12. Für den Minimal-`bpy`-Export genügt
+        glibc 2.28; das vollständige Notebook benötigt wegen des offiziellen
+        Open3D-Wheels glibc 2.31 oder neuer. Google Colab erfüllt diese
         Voraussetzungen. Eine lokale Blender-Installation, ein Display und eine
         GPU sind nicht erforderlich.
 
         Die erste Zelle installiert die Projektmodule aus dem Wurzelverzeichnis
         des Repositories. Deshalb wird **kein** `#subdirectory=imports` verwendet.
-        Open3D, Plotly und `nbformat` ergänzen die interaktive Darstellung.
-        `%pip` installiert in den aktiven Notebook-Kernel. Die Pakete stehen
-        bewusst explizit im Befehl, damit das Notebook schon vor der Übernahme der
-        korrigierten optionalen Abhängigkeiten in `main` ausführbar ist.
+        Das Extra `visualization` ergänzt die bereits vorhandene Open3D-/Plotly-
+        Darstellung. `%pip` installiert in den aktiven Notebook-Kernel.
         """,
     ),
     code(
         "install-project",
         """
-        %pip install --upgrade --no-cache-dir "hypercube-graph-surface @ git+https://github.com/Hadron-JLeo/BachelorArbeit.git@main" "open3d==0.19.0" "plotly==6.3.0" "nbformat==5.10.4"
+        %pip install --upgrade --no-cache-dir "hypercube-graph-surface[visualization] @ git+https://github.com/Hadron-JLeo/BachelorArbeit.git@main"
         """,
     ),
     markdown(

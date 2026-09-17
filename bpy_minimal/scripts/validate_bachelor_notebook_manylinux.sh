@@ -2,17 +2,21 @@
 set -euo pipefail
 
 readonly PYTHON_ABI="${BPY_PYTHON_ABI:?BPY_PYTHON_ABI is required}"
-readonly PYTHON="/opt/python/${PYTHON_ABI}/bin/python"
+readonly REPOSITORY_ROOT="${BACHELOR_NOTEBOOK_REPOSITORY:-${GITHUB_WORKSPACE:-/repository}}"
+readonly OUTPUT_ROOT="${BACHELOR_NOTEBOOK_OUTPUT:-/output}"
+readonly PYTHON="${BACHELOR_NOTEBOOK_PYTHON:-$(command -v python)}"
 readonly VENV="/tmp/bachelor-notebook-${PYTHON_ABI}"
-readonly NOTEBOOK="/repository/Hypercube-graph-bpy-minimal.ipynb"
-readonly EXECUTED="/output/Hypercube-graph-bpy-minimal.executed.ipynb"
-readonly EXPORT_DIR="/output/blender_export"
+readonly NOTEBOOK="${REPOSITORY_ROOT}/Hypercube-graph-bpy-minimal.ipynb"
+readonly EXECUTED="${OUTPUT_ROOT}/Hypercube-graph-bpy-minimal.executed.ipynb"
+readonly EXPORT_DIR="${OUTPUT_ROOT}/blender_export"
 readonly BLEND="${EXPORT_DIR}/Q4_Hypercube_Polygonfamilie.blend"
 readonly SOURCE_JSON="${EXPORT_DIR}/Q4_Hypercube_Polygonfamilie.json"
 readonly INDEX_URL="https://pypi.org/simple"
 
 test -x "${PYTHON}"
 test -f "${NOTEBOOK}"
+mkdir -p "${OUTPUT_ROOT}"
+export BACHELOR_NOTEBOOK_OUTPUT="${OUTPUT_ROOT}"
 "${PYTHON}" -m venv "${VENV}"
 "${VENV}/bin/python" -m pip install --disable-pip-version-check \
   --index-url "${INDEX_URL}" \
@@ -21,8 +25,8 @@ test -f "${NOTEBOOK}"
   'nbformat==5.10.4'
 
 "${VENV}/bin/python" \
-  /repository/bpy_minimal/scripts/execute_notebook_smoke.py \
-  "${NOTEBOOK}" "${EXECUTED}" /output
+  "${REPOSITORY_ROOT}/bpy_minimal/scripts/execute_notebook_smoke.py" \
+  "${NOTEBOOK}" "${EXECUTED}" "${OUTPUT_ROOT}"
 
 test -s "${BLEND}"
 test -s "${SOURCE_JSON}"
@@ -31,12 +35,14 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from pathlib import Path
 
 import bpy
 
 
-blend_path = Path("/output/blender_export/Q4_Hypercube_Polygonfamilie.blend")
+output_root = Path(os.environ["BACHELOR_NOTEBOOK_OUTPUT"])
+blend_path = output_root / "blender_export/Q4_Hypercube_Polygonfamilie.blend"
 json_path = blend_path.with_suffix(".json")
 source = json.loads(json_path.read_text(encoding="utf-8"))
 
@@ -92,7 +98,7 @@ print(
 PY
 
 "${VENV}/bin/python" -m pip check
-"${VENV}/bin/python" -m pip freeze --all > /output/bachelor-notebook-pip-freeze.txt
-printf '%s\n' "${PYTHON_ABI}" > /output/python-abi.txt
-printf '%s\n' "${INDEX_URL}" > /output/python-package-index.txt
+"${VENV}/bin/python" -m pip freeze --all > "${OUTPUT_ROOT}/bachelor-notebook-pip-freeze.txt"
+printf '%s\n' "${PYTHON_ABI}" > "${OUTPUT_ROOT}/python-abi.txt"
+printf '%s\n' "${INDEX_URL}" > "${OUTPUT_ROOT}/python-package-index.txt"
 printf 'BACHELOR_NOTEBOOK_VALIDATION_OK\n'
