@@ -35,9 +35,6 @@ Oberfläche neu. Es werden keine vorherigen Notebook-Variablen benötigt.
 | `imports/blender_export.py` | Blender-Szene, Hierarchien und Export |
 | `imports/main.py` | Konstruktion, Export und Download in einem Aufruf |
 
-Die ursprünglichen ausführlichen [Erläuterungen](docs/notebook.md) bleiben
-separat verfügbar. `graph_hypercube.ipynb` ist eine ältere, eigenständige Fassung.
-
 ## Voraussetzungen
 
 Die veröffentlichten Minimal-bpy-Wheels unterstützen Linux x86_64, glibc 2.28
