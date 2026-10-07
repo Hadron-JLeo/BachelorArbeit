@@ -18,9 +18,7 @@ from imports.main import main
 blend_path = main(dimension=4)
 ```
 
-Colab startet den Download, lokales Jupyter zeigt einen Dateilink. Die Dateien
-werden unter `blender_export/` gespeichert. Gleichnamige Exporte werden ersetzt;
-mit `overwrite=False` lässt sich das verhindern. Jeder Aufruf erzeugt seine
+Colab startet den Download, Jupyter lädt eine Blender Datei herunter. Jeder Aufruf erzeugt seine
 Oberfläche neu. Es werden keine vorherigen Notebook-Variablen benötigt.
 ## Module
 
