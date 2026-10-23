@@ -18,13 +18,8 @@ class GeometryConfig:
     target_height: float = 1.0
 
     def __post_init__(self) -> None:
-        positive_values = {
-            "shear_margin": self.shear_margin,
-            "cut_margin": self.cut_margin,
-            "zero_tolerance": self.zero_tolerance,
-            "target_height": self.target_height,
-        }
-        for name, value in positive_values.items():
+        for name in ("shear_margin", "cut_margin", "zero_tolerance", "target_height"):
+            value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} muss positiv und endlich sein.")
         if not math.isfinite(self.cut_fraction) or not 0 < self.cut_fraction < 1:

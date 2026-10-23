@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import colorsys
 import json
+from functools import partial
 from numbers import Integral
 from pathlib import Path
 
 import numpy as np
 
 from .model import Polygon3D
+
+_to_json = partial(json.dumps, ensure_ascii=False, indent=2, allow_nan=False)
 
 
 def surface_payload(polygons: list[Polygon3D], dimension: int) -> dict:
@@ -38,26 +41,23 @@ def surface_payload(polygons: list[Polygon3D], dimension: int) -> dict:
                 "neighbor_indices": [
                     index ^ (1 << bit) for bit in range(dimension)
                 ],
-                "vertices": np.asarray(
-                    polygon.vertices, dtype=float
-                ).tolist(),
+                "vertices": np.asarray(polygon.vertices, dtype=float).tolist(),
             }
         )
     return {
         "schema_version": 2,
         "dimension": dimension,
-        "coordinate_system": (
-            "NumPy x/y/z unverändert, keine Achsendrehung oder Skalierung"
-        ),
-        "hierarchy": (
-            "chronologischer Induktionspfad; 0=Original, 1=Spiegelbild"
-        ),
+        "coordinate_system": "NumPy x/y/z unverändert, keine Achsendrehung oder Skalierung",
+        "hierarchy": "chronologischer Induktionspfad; 0=Original, 1=Spiegelbild",
         "polygons": records,
     }
 
 
-def build_blender_scene(data: dict) -> dict:
-    """Erzeugt die vollständige Blender-Szene im aktiven Python-Prozess."""
+def build_blender_scene(data: dict, source_json: str | None = None) -> dict:
+    """Erzeugt die vollständige Blender-Szene im aktiven Python-Prozess.
+
+    ``source_json`` ist optional die bereits serialisierte Form von ``data``.
+    """
     import bpy
     from mathutils import Quaternion, Vector
 
@@ -72,17 +72,8 @@ def build_blender_scene(data: dict) -> dict:
 
     model_collection = bpy.data.collections.new(f"Q{dimension}_Modell")
     scene.collection.children.link(model_collection)
-    points = [
-        Vector(vertex)
-        for record in records
-        for vertex in record["vertices"]
-    ]
-    lower = Vector(
-        tuple(min(point[axis] for point in points) for axis in range(3))
-    )
-    upper = Vector(
-        tuple(max(point[axis] for point in points) for axis in range(3))
-    )
+    columns = list(zip(*(vertex for record in records for vertex in record["vertices"])))
+    lower, upper = Vector(map(min, columns)), Vector(map(max, columns))
     center = (lower + upper) / 2
     extent = max((upper - lower).length, 1.0)
 
@@ -107,12 +98,12 @@ def build_blender_scene(data: dict) -> dict:
     groups = {"": root}
     materials = []
     for index in range(8):
-        rgb = colorsys.hsv_to_rgb(index / 8, 0.48, 0.72)
+        rgba = (*colorsys.hsv_to_rgb(index / 8, 0.48, 0.72), 1.0)
         material = bpy.data.materials.new(f"Polygonfarbe_{index + 1:02d}")
-        material.diffuse_color = (*rgb, 1.0)
+        material.diffuse_color = rgba
         material.use_nodes = True
         shader = material.node_tree.nodes.get("Principled BSDF")
-        shader.inputs["Base Color"].default_value = (*rgb, 1.0)
+        shader.inputs["Base Color"].default_value = rgba
         shader.inputs["Roughness"].default_value = 0.65
         materials.append(material)
 
@@ -132,19 +123,11 @@ def build_blender_scene(data: dict) -> dict:
                 groups[prefix] = group
 
         vertices = record["vertices"]
-        origin_xyz = tuple(
-            sum(vertex[axis] for vertex in vertices) / len(vertices)
-            for axis in range(3)
-        )
-        origin = Vector(origin_xyz)
-        local_vertices = [
-            tuple(vertex[axis] - origin_xyz[axis] for axis in range(3))
-            for vertex in vertices
-        ]
+        origin = [sum(axis) / len(vertices) for axis in zip(*vertices)]
         name = f"Polygon_{path or 'Basis'}"
         mesh = bpy.data.meshes.new(name + "_Mesh")
         mesh.from_pydata(
-            local_vertices,
+            [[c - o for c, o in zip(vertex, origin)] for vertex in vertices],
             [],
             [list(range(len(vertices)))],
         )
@@ -153,16 +136,14 @@ def build_blender_scene(data: dict) -> dict:
         obj = bpy.data.objects.new(name, mesh)
         model_collection.objects.link(obj)
         obj.parent = groups.get(path[:-1], root)
-        obj.location = origin - center
+        obj.location = Vector(origin) - center
         obj["role"] = "source_polygon"
         obj["source_index"] = record["index"]
         obj["source_label"] = record["label"]
         obj["construction_path"] = path
         obj["graph_bits"] = record["graph_bits"]
         obj["vertex_count_numpy"] = len(vertices)
-        obj["neighbor_indices_json"] = json.dumps(
-            record["neighbor_indices"]
-        )
+        obj["neighbor_indices_json"] = json.dumps(record["neighbor_indices"])
         color_index = int((path[:3] or "0").ljust(3, "0"), 2)
         obj.data.materials.append(materials[color_index])
         obj.color = materials[color_index].diffuse_color
@@ -172,9 +153,7 @@ def build_blender_scene(data: dict) -> dict:
 
     bpy.context.view_layer.update()
     source_text = bpy.data.texts.new("NumPy_Quelldaten.json")
-    source_text.write(
-        json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False)
-    )
+    source_text.write(source_json or _to_json(data))
     readme = bpy.data.texts.new("LIESMICH_Blender")
     readme.write(
         "Gesamtmodell: Q*_Gesamtmodell auswählen und G/R/S verwenden.\n"
@@ -189,6 +168,7 @@ def build_blender_scene(data: dict) -> dict:
         "Für den Blick ins Innere: X-Ray oder Drahtgitter verwenden.\n"
     )
 
+    view_rotation = Quaternion((0.820, 0.425, 0.176, 0.340)).normalized()
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type == "VIEW_3D":
@@ -198,9 +178,7 @@ def build_blender_scene(data: dict) -> dict:
                 space.shading.show_cavity = True
                 space.region_3d.view_location = center
                 space.region_3d.view_distance = extent * 1.65
-                space.region_3d.view_rotation = Quaternion(
-                    (0.820, 0.425, 0.176, 0.340)
-                ).normalized()
+                space.region_3d.view_rotation = view_rotation
                 space.clip_start = 0.0001
                 space.clip_end = extent * 100
 
@@ -210,12 +188,8 @@ def build_blender_scene(data: dict) -> dict:
         "blender_version": bpy.app.version_string,
         "dimension": dimension,
         "mesh_objects": len(polygon_objects),
-        "mesh_faces": sum(
-            len(obj.data.polygons) for obj in polygon_objects
-        ),
-        "mesh_vertices": sum(
-            len(obj.data.vertices) for obj in polygon_objects
-        ),
+        "mesh_faces": sum(len(obj.data.polygons) for obj in polygon_objects),
+        "mesh_vertices": sum(len(obj.data.vertices) for obj in polygon_objects),
         "empty_objects": len(groups),
     }
 
@@ -239,12 +213,10 @@ def export_surface_to_blend(
     data = surface_payload(polygons, dimension)
     path.parent.mkdir(parents=True, exist_ok=True)
     json_path = path.with_suffix(".json")
-    json_path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False),
-        encoding="utf-8",
-    )
+    source_json = _to_json(data)
+    json_path.write_text(source_json, encoding="utf-8")
 
-    result = build_blender_scene(data)
+    result = build_blender_scene(data, source_json)
     bpy.context.preferences.filepaths.save_version = 0
     save_result = bpy.ops.wm.save_as_mainfile(
         filepath=str(path),

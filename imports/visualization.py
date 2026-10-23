@@ -27,31 +27,14 @@ def create_open3d_model(
     if not polygons:
         raise ValueError("Die Oberfläche darf nicht leer sein.")
 
-    mesh_vertices = []
-    mesh_triangles = []
-    edge_lines = []
-    vertex_offset = 0
-
-    for polygon in polygons:
-        vertex_count = len(polygon.vertices)
-        vertex_indices = np.arange(vertex_offset, vertex_offset + vertex_count)
-        triangles = np.column_stack(
-            (
-                np.full(vertex_count - 2, vertex_offset),
-                vertex_indices[1:-1],
-                vertex_indices[2:],
-            )
-        )
-        lines = np.column_stack((vertex_indices, np.roll(vertex_indices, -1)))
-
-        mesh_vertices.append(polygon.vertices)
-        mesh_triangles.append(triangles)
-        edge_lines.append(lines)
-        vertex_offset += vertex_count
-
-    vertices = np.vstack(mesh_vertices)
-    triangles = np.vstack(mesh_triangles)
-    lines = np.vstack(edge_lines)
+    vertices = np.concatenate([polygon.vertices for polygon in polygons])
+    counts = np.array([len(polygon.vertices) for polygon in polygons])
+    first = np.repeat(np.cumsum(counts) - counts, counts)  # first vertex of own polygon
+    last = first + np.repeat(counts, counts) - 1
+    index = np.arange(len(vertices))
+    fan = (first < index) & (index < last)
+    triangles = np.column_stack((first[fan], index[fan], index[fan] + 1))
+    lines = np.column_stack((index, np.where(index == last, first, index + 1)))
 
     mesh = o3d.geometry.TriangleMesh()
     mesh.vertices = o3d.utility.Vector3dVector(vertices)
@@ -61,8 +44,9 @@ def create_open3d_model(
     edges = o3d.geometry.LineSet()
     edges.points = o3d.utility.Vector3dVector(vertices)
     edges.lines = o3d.utility.Vector2iVector(lines)
-    edge_color = np.asarray(config.edge_color, dtype=float)
-    edges.colors = o3d.utility.Vector3dVector(np.tile(edge_color, (len(lines), 1)))
+    edges.colors = o3d.utility.Vector3dVector(
+        np.tile(np.asarray(config.edge_color, dtype=float), (len(lines), 1))
+    )
     return mesh, edges
 
 
@@ -79,7 +63,7 @@ def show_open3d_model(
     from open3d.visualization.draw_plotly import get_plotly_fig
 
     figure = get_plotly_fig([mesh, edges], width=config.width, height=config.height)
-    edge_color = np.asarray(config.edge_color, dtype=float)
+    edge_rgb = "rgb({},{},{})".format(*(round(255 * value) for value in config.edge_color))
 
     for trace in figure.data:
         if trace.type == "mesh3d":
@@ -99,14 +83,7 @@ def show_open3d_model(
                 },
             )
         elif trace.type == "scatter3d":
-            trace.update(
-                line={
-                    "color": "rgb({},{},{})".format(
-                        *(int(round(255 * value)) for value in edge_color)
-                    ),
-                    "width": 2,
-                }
-            )
+            trace.update(line={"color": edge_rgb, "width": 2})
 
     figure.update_layout(
         title=title,
@@ -135,33 +112,27 @@ def print_vertex_coordinates(
     if not 1 <= precision <= 17:
         raise ValueError("precision muss zwischen 1 und 17 liegen.")
 
-    rows = []
-    for polygon_index, polygon in enumerate(polygons, start=1):
-        polygon_label = polygon.label or f"poly_{polygon_index}"
-        for vertex_index, vertex in enumerate(polygon.vertices, start=1):
-            vertex_label = f"P{polygon_index:03d}_E{vertex_index:03d}"
-            coordinates = [format(float(value), f".{precision}g") for value in vertex]
-            rows.append([polygon_label, vertex_label, *coordinates])
-
-    headings = ["Polygon", "Eckpunkt", "x", "y", "z"]
-    widths = (
+    rows = [
         [
-            max(len(heading), *(len(row[column]) for row in rows))
-            for column, heading in enumerate(headings)
+            polygon.label or f"poly_{polygon_index}",
+            f"P{polygon_index:03d}_E{vertex_index:03d}",
+            *(format(float(value), f".{precision}g") for value in vertex),
         ]
-        if rows
-        else list(map(len, headings))
-    )
-    print(" | ".join(heading.ljust(width) for heading, width in zip(headings, widths)))
-    print("-+-".join("-" * width for width in widths))
-    for row in rows:
-        print(
-            " | ".join(
-                value.ljust(width) if column < 2 else value.rjust(width)
-                for column, (value, width) in enumerate(zip(row, widths))
-            )
-        )
-    print(f"\nEckpunkte insgesamt (pro Polygon gezählt): {len(rows)}")
+        for polygon_index, polygon in enumerate(polygons, start=1)
+        for vertex_index, vertex in enumerate(polygon.vertices, start=1)
+    ]
+    headings = ["Polygon", "Eckpunkt", "x", "y", "z"]
+    widths = [max(map(len, column)) for column in zip(headings, *rows)]
+    lines = [
+        " | ".join(map(str.ljust, headings, widths)),
+        "-+-".join("-" * width for width in widths),
+        *(
+            " | ".join([*map(str.ljust, row[:2], widths), *map(str.rjust, row[2:], widths[2:])])
+            for row in rows
+        ),
+        f"\nEckpunkte insgesamt (pro Polygon gezählt): {len(rows)}",
+    ]
+    print("\n".join(lines))
 
 
 __all__ = [
