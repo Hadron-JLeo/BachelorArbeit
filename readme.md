@@ -43,13 +43,3 @@ optionalen Paket-Extra `visualization`.
 
 Die verfügbaren Wheels und Prüfnachweise liegen im
 [Release bpy-mesh-4.5.3.1](https://github.com/Hadron-JLeo/BachelorArbeit/releases/tag/bpy-mesh-4.5.3.1).
-
-## Prüfung
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-Die Blender-Integrationstests werden ohne installiertes `bpy` übersprungen.
-Das Geometrieverfahren und seine Standardparameter wurden bei der Auslagerung
-nicht verändert. Die Modularisierung erfolgte mit KI-Unterstützung.
